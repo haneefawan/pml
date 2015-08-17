@@ -1,0 +1,83 @@
+---
+title: "Practical Machine Learning"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+
+### Data 
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+The training data for this project are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r}
+suppressMessages(library(caret))
+suppressMessages(library(dplyr))
+suppressMessages(library(randomForest))
+
+# Getting data
+training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(training, "./train.csv", method = "curl")
+download.file(testing, "./test.csv", method = "curl")
+
+train <- read.csv("./train.csv", na.strings = c("#DIV/0!", "", "NA"))
+test <- read.csv("./test.csv", na.strings = c("#DIV/0!", "", "NA"))  
+
+set.seed(3431)
+
+# Splitting data set into 70% and 30% for training and cross-validation respectively.
+inTrain <- createDataPartition(y = train$classe, p = 0.7, list = FALSE)
+training <- train[inTrain,]
+testing <- train[-inTrain,]
+
+# Removing near zero-variance variables
+nsv <- nearZeroVar(training)
+training <- training[, -nsv]
+
+# removing uninformative covariates
+training <- select(training, -(X:num_window))
+
+# removing covariates with NAs (>50%)
+training <- training[,colSums(is.na(training))/nrow(training) < 0.50]
+
+# Training model
+modFit <- randomForest(classe~., data = training, method = "class")
+
+# Cross validation
+predict <- predict(modFit, testing, type = "class")
+confusionMatrix(predict, testing$classe)
+
+final <- predict(modFit, test, type = "class")
+final
+```
+### Conclusion
+Accuracy of Random Forest model: `r 0.9951 * 100`%.
+
+Expected out-of-sample error:  `r 100 - 0.9951 * 100`%
+
+Thus, there will be very few miscalculations when categorizing the test set.
+
+### Writing files for submission
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(final)
+```
